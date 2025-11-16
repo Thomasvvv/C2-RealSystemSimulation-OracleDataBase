@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from db.db_conn import get_connection, release_connection, next_seq_val
+from db.db_conn import connect, close
 
 bp = Blueprint('course', __name__)
 
@@ -22,14 +22,26 @@ def create_course():
                 'message': 'Campos obrigatórios: nome, carga_horaria_total'
             }), 400
 
-        conn = get_connection()
-        cur = conn.cursor()
+        db = connect()
 
         try:
-            new_id = next_seq_val("CURSO_ID_SEQ", conn)
-            sql = "INSERT INTO CURSOS (ID, NOME, CARGA_HORARIA_TOTAL) VALUES (" + str(new_id) + ", '" + str(nome) + "', " + str(carga_horaria_total) + ")"
-            cur.execute(sql)
-            conn.commit()
+            # Buscar o próximo ID usando contador
+            result = db.counters.find_one_and_update(
+                {"_id": "curso_id"},
+                {"$inc": {"seq": 1}},
+                upsert=True,
+                return_document=True
+            )
+            new_id = result["seq"]
+            
+            # Criar documento do curso
+            course_doc = {
+                "id": new_id,
+                "nome": nome,
+                "carga_horaria_total": float(carga_horaria_total)
+            }
+            
+            db.cursos.insert_one(course_doc)
             
             return jsonify({
                 'success': True,
@@ -38,14 +50,12 @@ def create_course():
             }), 201
             
         except Exception as e:
-            conn.rollback()
             return jsonify({
                 'success': False,
                 'message': f'Erro ao criar curso: {str(e)}'
             }), 500
         finally:
-            cur.close()
-            release_connection(conn)
+            close()
             
     except Exception as e:
         return jsonify({
@@ -55,19 +65,19 @@ def create_course():
 
 @bp.route('/courses', methods=['GET'])
 def list_courses():
-    conn = get_connection()
-    cur = conn.cursor()
+    db = connect()
     try:
-        sql = "SELECT ID, NOME, CARGA_HORARIA_TOTAL FROM CURSOS ORDER BY NOME"
-        cur.execute(sql)
-        rows = cur.fetchall()
+        # Buscar todos os cursos ordenados por nome
+        cursor = db.cursos.find({}, {"_id": 0}).sort("nome", 1)
         courses = []
-        for row in rows:
+        
+        for doc in cursor:
             courses.append({
-                'id': row[0],
-                'nome': row[1],
-                'carga_horaria_total': row[2]
+                'id': doc.get('id'),
+                'nome': doc.get('nome'),
+                'carga_horaria_total': doc.get('carga_horaria_total')
             })
+        
         return jsonify({
             'success': True,
             'data': courses,
@@ -79,23 +89,19 @@ def list_courses():
             'message': f'Erro ao listar cursos: {str(e)}'
         }), 500
     finally:
-        cur.close()
-        release_connection(conn)
+        close()
 
 @bp.route('/courses/<int:course_id>', methods=['GET'])
 def get_course_by_id(course_id):
-    conn = get_connection()
-    cur = conn.cursor()
+    db = connect()
     try:
-        sql = "SELECT ID, NOME, CARGA_HORARIA_TOTAL FROM CURSOS WHERE ID = " + str(course_id)
-        cur.execute(sql)
-        row = cur.fetchone()
+        doc = db.cursos.find_one({"id": course_id}, {"_id": 0})
         
-        if row:
+        if doc:
             course = {
-                'id': row[0],
-                'nome': row[1],
-                'carga_horaria_total': row[2]
+                'id': doc.get('id'),
+                'nome': doc.get('nome'),
+                'carga_horaria_total': doc.get('carga_horaria_total')
             }
             return jsonify({
                 'success': True,
@@ -113,8 +119,7 @@ def get_course_by_id(course_id):
             'message': f'Erro ao buscar curso: {str(e)}'
         }), 500
     finally:
-        cur.close()
-        release_connection(conn)
+        close()
 
 @bp.route('/courses/<int:course_id>', methods=['PUT'])
 def update_course(course_id):
@@ -126,30 +131,26 @@ def update_course(course_id):
                 'message': 'Dados JSON são obrigatórios'
             }), 400
 
-        conn = get_connection()
-        cur = conn.cursor()
+        db = connect()
 
         try:
-            sql_check = "SELECT COUNT(1) FROM CURSOS WHERE ID = " + str(course_id)
-            cur.execute(sql_check)
-            if cur.fetchone()[0] == 0:
+            # Verificar se o curso existe
+            existing_course = db.cursos.find_one({"id": course_id})
+            if not existing_course:
                 return jsonify({
                     'success': False,
                     'message': 'Curso não encontrado'
                 }), 404
 
-            update_parts = []
+            update_data = {}
             
             if 'nome' in data and data['nome'] is not None and str(data['nome']).strip() != '':
-                nome_escaped = str(data['nome']).replace("'", "''")
-                update_parts.append("NOME = '" + nome_escaped + "'")
+                update_data['nome'] = str(data['nome'])
             
             if 'carga_horaria_total' in data:
                 carga_value = data['carga_horaria_total']
                 
-                if carga_value is None or (isinstance(carga_value, str) and carga_value.strip() == ''):
-                    pass
-                else:
+                if carga_value is not None and not (isinstance(carga_value, str) and carga_value.strip() == ''):
                     try:
                         carga_horaria = float(carga_value)
                         if carga_horaria < 0:
@@ -157,23 +158,24 @@ def update_course(course_id):
                                 'success': False,
                                 'message': 'Carga horária deve ser um número positivo'
                             }), 400
-                        update_parts.append("CARGA_HORARIA_TOTAL = " + str(carga_horaria))
+                        update_data['carga_horaria_total'] = carga_horaria
                     except (ValueError, TypeError):
                         return jsonify({
                             'success': False,
                             'message': f'Carga horária deve ser um número válido. Valor fornecido: {carga_value}'
                         }), 400
 
-            if not update_parts:
+            if not update_data:
                 return jsonify({
                     'success': False,
                     'message': 'Nenhum campo válido para atualizar foi fornecido'
                 }), 400
 
-            sql = "UPDATE CURSOS SET " + ", ".join(update_parts) + " WHERE ID = " + str(course_id)
-            print(f"SQL gerado: {sql}")  # Debug
-            cur.execute(sql)
-            conn.commit()
+            # Atualizar documento
+            db.cursos.update_one(
+                {"id": course_id},
+                {"$set": update_data}
+            )
             
             return jsonify({
                 'success': True,
@@ -181,14 +183,12 @@ def update_course(course_id):
             }), 200
             
         except Exception as e:
-            conn.rollback()
             return jsonify({
                 'success': False,
                 'message': f'Erro ao atualizar curso: {str(e)}'
             }), 500
         finally:
-            cur.close()
-            release_connection(conn)
+            close()
             
     except Exception as e:
         return jsonify({
@@ -198,39 +198,34 @@ def update_course(course_id):
 
 @bp.route('/courses/<int:course_id>', methods=['DELETE'])
 def delete_course(course_id):
-    conn = get_connection()
-    cur = conn.cursor()
+    db = connect()
     try:
-        sql_check_students = "SELECT COUNT(1) FROM ALUNO WHERE ID_CURSO = " + str(course_id)
-        cur.execute(sql_check_students)
-        student_count = cur.fetchone()[0]
+        # Verificar se o curso possui alunos matriculados
+        student_count = db.alunos.count_documents({"id_curso": course_id})
         if student_count > 0:
             return jsonify({
                 'success': False,
                 'message': 'Curso possui alunos matriculados e não pode ser excluído. Remova-os antes.'
             }), 400
         
-        sql_check_subjects = "SELECT COUNT(1) FROM MATERIA WHERE ID_CURSO = " + str(course_id)
-        cur.execute(sql_check_subjects)
-        subject_count = cur.fetchone()[0]
+        # Verificar se o curso possui matérias cadastradas
+        subject_count = db.materias.count_documents({"id_curso": course_id})
         if subject_count > 0:
             return jsonify({
                 'success': False,
                 'message': 'Curso possui matérias cadastradas e não pode ser excluído. Remova-as antes.'
             }), 400
         
-        sql_check_exists = "SELECT COUNT(1) FROM CURSOS WHERE ID = " + str(course_id)
-        cur.execute(sql_check_exists)
-        course_exists = cur.fetchone()[0]
-        if course_exists == 0:
+        # Verificar se o curso existe
+        existing_course = db.cursos.find_one({"id": course_id})
+        if not existing_course:
             return jsonify({
                 'success': False,
                 'message': 'Curso não encontrado'
             }), 404
         
-        sql = "DELETE FROM CURSOS WHERE ID = " + str(course_id)
-        cur.execute(sql)
-        conn.commit()
+        # Deletar o curso
+        db.cursos.delete_one({"id": course_id})
         
         return jsonify({
             'success': True,
@@ -238,11 +233,9 @@ def delete_course(course_id):
         }), 200
         
     except Exception as e:
-        conn.rollback()
         return jsonify({
             'success': False,
             'message': f'Erro ao deletar curso: {str(e)}'
         }), 500
     finally:
-        cur.close()
-        release_connection(conn)
+        close()

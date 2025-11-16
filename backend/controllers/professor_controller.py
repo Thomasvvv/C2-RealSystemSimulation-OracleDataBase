@@ -1,20 +1,22 @@
 from flask import Blueprint, request, jsonify
-from db.db_conn import get_connection, release_connection, next_seq_val
+from db.db_conn import connect, close
 from datetime import datetime
 
 bp = Blueprint('professor', __name__)
 
-def format_date_for_oracle(dt_str):
-    """Convert date from various formats to 'YYYY-MM-DD' or return None for NULL."""
-    if not dt_str or dt_str.strip() == '':
+def parse_date(dt_str):
+    """Convert date from various formats to datetime object or return None."""
+    if not dt_str or (isinstance(dt_str, str) and dt_str.strip() == ''):
         return None
-    try:
-        datetime.strptime(dt_str, '%Y-%m-%d')
+    
+    if isinstance(dt_str, datetime):
         return dt_str
+    
+    try:
+        return datetime.strptime(dt_str, '%Y-%m-%d')
     except ValueError:
         try:
-            dt = datetime.strptime(dt_str, '%d/%m/%Y')
-            return dt.strftime('%Y-%m-%d')
+            return datetime.strptime(dt_str, '%d/%m/%Y')
         except ValueError:
             raise ValueError("A data deve estar no formato 'YYYY-MM-DD' ou 'DD/MM/YYYY'.")
 
@@ -39,24 +41,35 @@ def create_professor():
                 'message': 'Campos obrigatórios: cpf, nome, email, status'
             }), 400
 
-        conn = get_connection()
-        cur = conn.cursor()
-
+        db = connect()
         data_nasc = data.get("data_nasc")
         telefone = data.get("telefone")
 
         try:
-            formatted_date = format_date_for_oracle(data_nasc) if data_nasc else None
+            # Parse date
+            parsed_date = parse_date(data_nasc) if data_nasc else None
             
-            new_id = next_seq_val("PROFESSOR_ID_PROFESSOR_SEQ", conn)
+            # Gerar novo ID
+            result = db.counters.find_one_and_update(
+                {"_id": "professor_id"},
+                {"$inc": {"seq": 1}},
+                upsert=True,
+                return_document=True
+            )
+            new_id = result["seq"]
             
-            data_part = "NULL" if formatted_date is None else "TO_DATE('" + str(formatted_date) + "','YYYY-MM-DD')"
-            telefone_part = "NULL" if telefone is None else "'" + str(telefone) + "'"
+            # Criar documento do professor
+            professor_doc = {
+                "id_professor": new_id,
+                "cpf": cpf,
+                "nome": nome,
+                "data_nasc": parsed_date,
+                "telefone": telefone,
+                "email": email,
+                "status": status
+            }
             
-            sql = "INSERT INTO PROFESSORES (ID_PROFESSOR, CPF, NOME, DATA_NASC, TELEFONE, EMAIL, STATUS) VALUES (" + str(new_id) + ", '" + str(cpf) + "', '" + str(nome) + "', " + data_part + ", " + telefone_part + ", '" + str(email) + "', '" + str(status) + "')"
-            
-            cur.execute(sql)
-            conn.commit()
+            db.professores.insert_one(professor_doc)
             
             return jsonify({
                 'success': True,
@@ -65,14 +78,12 @@ def create_professor():
             }), 201
             
         except Exception as e:
-            conn.rollback()
             return jsonify({
                 'success': False,
                 'message': f'Erro ao criar professor: {str(e)}'
             }), 500
         finally:
-            cur.close()
-            release_connection(conn)
+            close()
             
     except ValueError as ve:
         return jsonify({
@@ -87,23 +98,24 @@ def create_professor():
 
 @bp.route('/professors', methods=['GET'])
 def list_professors():
-    conn = get_connection()
-    cur = conn.cursor()
+    db = connect()
     try:
-        sql = "SELECT ID_PROFESSOR, CPF, NOME, TO_CHAR(DATA_NASC, 'YYYY-MM-DD'), TELEFONE, EMAIL, STATUS FROM PROFESSORES ORDER BY NOME"
-        cur.execute(sql)
-        rows = cur.fetchall()
+        # Buscar todos os professores ordenados por nome
+        cursor = db.professores.find({}, {"_id": 0}).sort("nome", 1)
         professors = []
-        for row in rows:
-            professors.append({
-                'id_professor': row[0],
-                'cpf': row[1],
-                'nome': row[2],
-                'data_nasc': row[3],
-                'telefone': row[4],
-                'email': row[5],
-                'status': row[6]
-            })
+        
+        for doc in cursor:
+            professor = {
+                'id_professor': doc.get('id_professor'),
+                'cpf': doc.get('cpf'),
+                'nome': doc.get('nome'),
+                'data_nasc': doc.get('data_nasc').strftime('%Y-%m-%d') if doc.get('data_nasc') else None,
+                'telefone': doc.get('telefone'),
+                'email': doc.get('email'),
+                'status': doc.get('status')
+            }
+            professors.append(professor)
+        
         return jsonify({
             'success': True,
             'data': professors,
@@ -115,27 +127,23 @@ def list_professors():
             'message': f'Erro ao listar professores: {str(e)}'
         }), 500
     finally:
-        cur.close()
-        release_connection(conn)
+        close()
 
 @bp.route('/professors/<int:professor_id>', methods=['GET'])
 def get_professor_by_id(professor_id):
-    conn = get_connection()
-    cur = conn.cursor()
+    db = connect()
     try:
-        sql = "SELECT ID_PROFESSOR, CPF, NOME, TO_CHAR(DATA_NASC, 'YYYY-MM-DD'), TELEFONE, EMAIL, STATUS FROM PROFESSORES WHERE ID_PROFESSOR = " + str(professor_id)
-        cur.execute(sql)
-        row = cur.fetchone()
+        doc = db.professores.find_one({"id_professor": professor_id}, {"_id": 0})
         
-        if row:
+        if doc:
             professor = {
-                'id_professor': row[0],
-                'cpf': row[1],
-                'nome': row[2],
-                'data_nasc': row[3],
-                'telefone': row[4],
-                'email': row[5],
-                'status': row[6]
+                'id_professor': doc.get('id_professor'),
+                'cpf': doc.get('cpf'),
+                'nome': doc.get('nome'),
+                'data_nasc': doc.get('data_nasc').strftime('%Y-%m-%d') if doc.get('data_nasc') else None,
+                'telefone': doc.get('telefone'),
+                'email': doc.get('email'),
+                'status': doc.get('status')
             }
             return jsonify({
                 'success': True,
@@ -153,8 +161,7 @@ def get_professor_by_id(professor_id):
             'message': f'Erro ao buscar professor: {str(e)}'
         }), 500
     finally:
-        cur.close()
-        release_connection(conn)
+        close()
 
 @bp.route('/professors/<int:professor_id>', methods=['PUT'])
 def update_professor(professor_id):
@@ -166,40 +173,34 @@ def update_professor(professor_id):
                 'message': 'Dados JSON são obrigatórios'
             }), 400
 
-        conn = get_connection()
-        cur = conn.cursor()
+        db = connect()
 
         try:
-            sql_check = "SELECT COUNT(1) FROM PROFESSORES WHERE ID_PROFESSOR = " + str(professor_id)
-            cur.execute(sql_check)
-            if cur.fetchone()[0] == 0:
+            # Verificar se o professor existe
+            existing_professor = db.professores.find_one({"id_professor": professor_id})
+            if not existing_professor:
                 return jsonify({
                     'success': False,
                     'message': 'Professor não encontrado'
                 }), 404
 
-            update_parts = []
+            update_data = {}
             
             if 'cpf' in data:
-                cpf_val = "NULL" if data['cpf'] is None else "'" + str(data['cpf']) + "'"
-                update_parts.append("CPF = " + cpf_val)
+                update_data['cpf'] = data['cpf']
             
             if 'nome' in data:
-                update_parts.append("NOME = '" + str(data['nome']) + "'")
+                update_data['nome'] = data['nome']
                 
             if 'data_nasc' in data:
-                formatted_date = format_date_for_oracle(data['data_nasc']) if data['data_nasc'] else None
-                if formatted_date:
-                    update_parts.append("DATA_NASC = TO_DATE('" + str(formatted_date) + "','YYYY-MM-DD')")
-                else:
-                    update_parts.append("DATA_NASC = NULL")
+                parsed_date = parse_date(data['data_nasc']) if data['data_nasc'] else None
+                update_data['data_nasc'] = parsed_date
                     
             if 'telefone' in data:
-                tel_val = "NULL" if data['telefone'] is None else "'" + str(data['telefone']) + "'"
-                update_parts.append("TELEFONE = " + tel_val)
+                update_data['telefone'] = data['telefone']
                 
             if 'email' in data:
-                update_parts.append("EMAIL = '" + str(data['email']) + "'")
+                update_data['email'] = data['email']
                 
             if 'status' in data:
                 status_value = data['status']
@@ -216,17 +217,19 @@ def update_professor(professor_id):
                         'message': 'Campo status é obrigatório e não pode estar vazio'
                     }), 400
                     
-                update_parts.append("STATUS = '" + status_str + "'")
+                update_data['status'] = status_str
 
-            if not update_parts:
+            if not update_data:
                 return jsonify({
                     'success': False,
                     'message': 'Nenhum campo para atualizar foi fornecido'
                 }), 400
 
-            sql = "UPDATE PROFESSORES SET " + ", ".join(update_parts) + " WHERE ID_PROFESSOR = " + str(professor_id)
-            cur.execute(sql)
-            conn.commit()
+            # Atualizar documento
+            db.professores.update_one(
+                {"id_professor": professor_id},
+                {"$set": update_data}
+            )
             
             return jsonify({
                 'success': True,
@@ -234,14 +237,12 @@ def update_professor(professor_id):
             }), 200
             
         except Exception as e:
-            conn.rollback()
             return jsonify({
                 'success': False,
                 'message': f'Erro ao atualizar professor: {str(e)}'
             }), 500
         finally:
-            cur.close()
-            release_connection(conn)
+            close()
             
     except ValueError as ve:
         return jsonify({
@@ -256,30 +257,26 @@ def update_professor(professor_id):
 
 @bp.route('/professors/<int:professor_id>', methods=['DELETE'])
 def delete_professor(professor_id):
-    conn = get_connection()
-    cur = conn.cursor()
+    db = connect()
     try:
-        sql_check_offers = "SELECT COUNT(1) FROM OFERTAS WHERE ID_PROFESSOR = " + str(professor_id)
-        cur.execute(sql_check_offers)
-        offer_count = cur.fetchone()[0]
+        # Verificar se o professor possui ofertas cadastradas
+        offer_count = db.ofertas.count_documents({"id_professor": professor_id})
         if offer_count > 0:
             return jsonify({
                 'success': False,
                 'message': 'Professor possui ofertas cadastradas e não pode ser excluído. Remova-as antes.'
             }), 400
         
-        sql_exists = "SELECT COUNT(1) FROM PROFESSORES WHERE ID_PROFESSOR = " + str(professor_id)
-        cur.execute(sql_exists)
-        professor_exists = cur.fetchone()[0]
-        if professor_exists == 0:
+        # Verificar se o professor existe
+        existing_professor = db.professores.find_one({"id_professor": professor_id})
+        if not existing_professor:
             return jsonify({
                 'success': False,
                 'message': 'Professor não encontrado'
             }), 404
         
-        sql = "DELETE FROM PROFESSORES WHERE ID_PROFESSOR = " + str(professor_id)
-        cur.execute(sql)
-        conn.commit()
+        # Deletar o professor
+        db.professores.delete_one({"id_professor": professor_id})
         
         return jsonify({
             'success': True,
@@ -287,11 +284,9 @@ def delete_professor(professor_id):
         }), 200
         
     except Exception as e:
-        conn.rollback()
         return jsonify({
             'success': False,
             'message': f'Erro ao deletar professor: {str(e)}'
         }), 500
     finally:
-        cur.close()
-        release_connection(conn)
+        close()

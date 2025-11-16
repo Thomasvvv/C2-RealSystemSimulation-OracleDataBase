@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from db.db_conn import get_connection, release_connection
+from db.db_conn import connect
 
 bp = Blueprint('grade_student', __name__)
 

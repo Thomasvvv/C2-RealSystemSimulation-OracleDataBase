@@ -1,23 +1,24 @@
 from flask import Blueprint, request, jsonify
-from db.db_conn import get_connection, release_connection, next_seq_val
+from db.db_conn import connect, close
 from datetime import datetime
 
 bp = Blueprint('student', __name__)
 
-def format_date_for_oracle(dt_str):
-    """Convert date from various formats to 'YYYY-MM-DD' or return None for NULL."""
-    if not dt_str or dt_str.strip() == '':
+def parse_date(dt_str):
+    """Convert date from various formats to datetime object or return None."""
+    if not dt_str or (isinstance(dt_str, str) and dt_str.strip() == ''):
         return None
-    try:
-        datetime.strptime(dt_str, '%Y-%m-%d')
+    
+    if isinstance(dt_str, datetime):
         return dt_str
+    
+    try:
+        return datetime.strptime(dt_str, '%Y-%m-%d')
     except ValueError:
         try:
-            dt = datetime.strptime(dt_str, '%d/%m/%Y')
-            return dt.strftime('%Y-%m-%d')
+            return datetime.strptime(dt_str, '%d/%m/%Y')
         except ValueError:
             raise ValueError("A data deve estar no formato 'YYYY-MM-DD' ou 'DD/MM/YYYY'.")
-    return dt_str
 
 @bp.route('/students', methods=['POST'])
 def create_student():
@@ -58,45 +59,51 @@ def create_student():
                 'message': f'Campos obrigatórios ausentes ou vazios: {", ".join(missing_fields)}'
             }), 400
 
-        conn = get_connection()
-        cur = conn.cursor()
-
+        db = connect()
         data_nasc = data.get("data_nasc")
         telefone = data.get("telefone")
 
         try:
-            from datetime import datetime
             ano_atual = datetime.now().year
-            
             curso_formatted = str(id_curso).zfill(2)
             
-            cur.execute(f"""
-                SELECT NVL(MAX(
-                    CASE 
-                        WHEN MATRICULA LIKE '{ano_atual}{curso_formatted}%' 
-                        THEN TO_NUMBER(SUBSTR(MATRICULA, -2))
-                        ELSE 0 
-                    END
-                ), 0) + 1 
-                FROM ALUNOS 
-                WHERE ID_CURSO = {id_curso}
-            """)
-            proximo_numero = cur.fetchone()[0]
+            # Buscar o próximo número sequencial para a matrícula
+            prefix_pattern = f"^{ano_atual}{curso_formatted}"
+            existing_students = list(db.alunos.find(
+                {
+                    "matricula": {"$regex": prefix_pattern},
+                    "id_curso": int(id_curso)
+                },
+                {"matricula": 1}
+            ).sort("matricula", -1).limit(1))
+            
+            if existing_students:
+                last_matricula = str(existing_students[0]['matricula'])
+                proximo_numero = int(last_matricula[-2:]) + 1
+            else:
+                proximo_numero = 1
             
             numero_formatted = str(proximo_numero).zfill(2)
-            
-            matricula = f"{ano_atual}{curso_formatted}{numero_formatted}"
+            matricula = int(f"{ano_atual}{curso_formatted}{numero_formatted}")
             print(f"Matrícula gerada: {matricula}")
             
-            formatted_date = format_date_for_oracle(data_nasc) if data_nasc else None
+            # Parse date
+            parsed_date = parse_date(data_nasc) if data_nasc else None
             
-            data_part = "NULL" if formatted_date is None else "TO_DATE('" + str(formatted_date) + "','YYYY-MM-DD')"
-            telefone_part = "NULL" if telefone is None else "'" + str(telefone) + "'"
+            # Criar documento do estudante
+            student_doc = {
+                "matricula": matricula,
+                "cpf": cpf,
+                "nome": nome,
+                "data_nasc": parsed_date,
+                "telefone": telefone,
+                "email": email,
+                "periodo": int(periodo),
+                "id_curso": int(id_curso),
+                "status_curso": status_curso
+            }
             
-            sql = "INSERT INTO ALUNOS (MATRICULA, CPF, NOME, DATA_NASC, TELEFONE, EMAIL, PERIODO, ID_CURSO, STATUS_CURSO) VALUES (" + str(matricula) + ", '" + str(cpf) + "', '" + str(nome) + "', " + data_part + ", " + telefone_part + ", '" + str(email) + "', " + str(periodo) + ", " + str(id_curso) + ", '" + str(status_curso) + "')"
-            
-            cur.execute(sql)
-            conn.commit()
+            db.alunos.insert_one(student_doc)
             
             return jsonify({
                 'success': True,
@@ -105,14 +112,12 @@ def create_student():
             }), 201
             
         except Exception as e:
-            conn.rollback()
             return jsonify({
                 'success': False,
                 'message': f'Erro ao criar estudante: {str(e)}'
             }), 500
         finally:
-            cur.close()
-            release_connection(conn)
+            close()
             
     except ValueError as ve:
         return jsonify({
@@ -127,25 +132,26 @@ def create_student():
 
 @bp.route('/students', methods=['GET'])
 def list_students():
-    conn = get_connection()
-    cur = conn.cursor()
+    db = connect()
     try:
-        sql = "SELECT MATRICULA, CPF, NOME, TO_CHAR(DATA_NASC, 'YYYY-MM-DD'), TELEFONE, EMAIL, PERIODO, ID_CURSO, STATUS_CURSO FROM ALUNOS ORDER BY NOME"
-        cur.execute(sql)
-        rows = cur.fetchall()
+        # Buscar todos os alunos ordenados por nome
+        cursor = db.alunos.find({}, {"_id": 0}).sort("nome", 1)
         students = []
-        for row in rows:
-            students.append({
-                'matricula': row[0],
-                'cpf': row[1],
-                'nome': row[2],
-                'data_nasc': row[3],
-                'telefone': row[4],
-                'email': row[5],
-                'periodo': row[6],
-                'id_curso': row[7],
-                'status_curso': row[8]
-            })
+        
+        for doc in cursor:
+            student = {
+                'matricula': doc.get('matricula'),
+                'cpf': doc.get('cpf'),
+                'nome': doc.get('nome'),
+                'data_nasc': doc.get('data_nasc').strftime('%Y-%m-%d') if doc.get('data_nasc') else None,
+                'telefone': doc.get('telefone'),
+                'email': doc.get('email'),
+                'periodo': doc.get('periodo'),
+                'id_curso': doc.get('id_curso'),
+                'status_curso': doc.get('status_curso')
+            }
+            students.append(student)
+        
         return jsonify({
             'success': True,
             'data': students,
@@ -157,29 +163,25 @@ def list_students():
             'message': f'Erro ao listar estudantes: {str(e)}'
         }), 500
     finally:
-        cur.close()
-        release_connection(conn)
+        close()
 
 @bp.route('/students/<int:student_id>', methods=['GET'])
 def get_student_by_id(student_id):
-    conn = get_connection()
-    cur = conn.cursor()
+    db = connect()
     try:
-        sql = "SELECT MATRICULA, CPF, NOME, TO_CHAR(DATA_NASC, 'YYYY-MM-DD'), TELEFONE, EMAIL, PERIODO, ID_CURSO, STATUS_CURSO FROM ALUNOS WHERE MATRICULA = " + str(student_id)
-        cur.execute(sql)
-        row = cur.fetchone()
+        doc = db.alunos.find_one({"matricula": student_id}, {"_id": 0})
         
-        if row:
+        if doc:
             student = {
-                'matricula': row[0],
-                'cpf': row[1],
-                'nome': row[2],
-                'data_nasc': row[3],
-                'telefone': row[4],
-                'email': row[5],
-                'periodo': row[6],
-                'id_curso': row[7],
-                'status_curso': row[8]
+                'matricula': doc.get('matricula'),
+                'cpf': doc.get('cpf'),
+                'nome': doc.get('nome'),
+                'data_nasc': doc.get('data_nasc').strftime('%Y-%m-%d') if doc.get('data_nasc') else None,
+                'telefone': doc.get('telefone'),
+                'email': doc.get('email'),
+                'periodo': doc.get('periodo'),
+                'id_curso': doc.get('id_curso'),
+                'status_curso': doc.get('status_curso')
             }
             return jsonify({
                 'success': True,
@@ -197,8 +199,7 @@ def get_student_by_id(student_id):
             'message': f'Erro ao buscar estudante: {str(e)}'
         }), 500
     finally:
-        cur.close()
-        release_connection(conn)
+        close()
 
 @bp.route('/students/<int:student_id>', methods=['PUT'])
 def update_student(student_id):
@@ -210,38 +211,33 @@ def update_student(student_id):
                 'message': 'Dados JSON são obrigatórios'
             }), 400
 
-        conn = get_connection()
-        cur = conn.cursor()
+        db = connect()
 
         try:
-            sql_check = "SELECT COUNT(1) FROM ALUNOS WHERE MATRICULA = " + str(student_id)
-            cur.execute(sql_check)
-            if cur.fetchone()[0] == 0:
+            # Verificar se o estudante existe
+            existing_student = db.alunos.find_one({"matricula": student_id})
+            if not existing_student:
                 return jsonify({
                     'success': False,
                     'message': 'Estudante não encontrado'
                 }), 404
 
-            update_parts = []
+            update_data = {}
             
             if 'matricula' in data:
-                update_parts.append("MATRICULA = " + str(data['matricula']))
+                update_data['matricula'] = int(data['matricula'])
             
             if 'nome' in data:
-                update_parts.append("NOME = '" + str(data['nome']) + "'")
+                update_data['nome'] = data['nome']
                 
             if 'cpf' in data:
-                cpf_val = "NULL" if data['cpf'] is None else "'" + str(data['cpf']) + "'"
-                update_parts.append("CPF = " + cpf_val)
+                update_data['cpf'] = data['cpf']
                 
             data_nasc = data.get('data_nasc') or data.get('data_nascimento')
             if data_nasc is not None:
                 try:
-                    formatted_date = format_date_for_oracle(data_nasc) if data_nasc else None
-                    if formatted_date:
-                        update_parts.append("DATA_NASC = TO_DATE('" + str(formatted_date) + "','YYYY-MM-DD')")
-                    else:
-                        update_parts.append("DATA_NASC = NULL")
+                    parsed_date = parse_date(data_nasc) if data_nasc else None
+                    update_data['data_nasc'] = parsed_date
                 except ValueError as ve:
                     return jsonify({
                         'success': False,
@@ -249,32 +245,32 @@ def update_student(student_id):
                     }), 400
                     
             if 'telefone' in data:
-                tel_val = "NULL" if data['telefone'] is None else "'" + str(data['telefone']) + "'"
-                update_parts.append("TELEFONE = " + tel_val)
+                update_data['telefone'] = data['telefone']
                 
             if 'email' in data:
-                update_parts.append("EMAIL = '" + str(data['email']) + "'")
+                update_data['email'] = data['email']
                 
             if 'periodo' in data:
-                update_parts.append("PERIODO = " + str(data['periodo']))
+                update_data['periodo'] = int(data['periodo'])
                 
             id_curso = data.get('id_curso') or data.get('course_id')
             if id_curso is not None:
-                update_parts.append("ID_CURSO = " + str(id_curso))
+                update_data['id_curso'] = int(id_curso)
                 
             if 'status_curso' in data:
-                status_val = "NULL" if data['status_curso'] is None else "'" + str(data['status_curso']) + "'"
-                update_parts.append("STATUS_CURSO = " + status_val)
+                update_data['status_curso'] = data['status_curso']
 
-            if not update_parts:
+            if not update_data:
                 return jsonify({
                     'success': False,
                     'message': 'Nenhum campo para atualizar foi fornecido'
                 }), 400
 
-            sql = "UPDATE ALUNOS SET " + ", ".join(update_parts) + " WHERE MATRICULA = " + str(student_id)
-            cur.execute(sql)
-            conn.commit()
+            # Atualizar documento
+            db.alunos.update_one(
+                {"matricula": student_id},
+                {"$set": update_data}
+            )
             
             return jsonify({
                 'success': True,
@@ -282,14 +278,12 @@ def update_student(student_id):
             }), 200
             
         except Exception as e:
-            conn.rollback()
             return jsonify({
                 'success': False,
                 'message': f'Erro ao atualizar estudante: {str(e)}'
             }), 500
         finally:
-            cur.close()
-            release_connection(conn)
+            close()
             
     except ValueError as ve:
         return jsonify({
@@ -304,30 +298,26 @@ def update_student(student_id):
 
 @bp.route('/students/<int:student_id>', methods=['DELETE'])
 def delete_student(student_id):
-    conn = get_connection()
-    cur = conn.cursor()
+    db = connect()
     try:
-        sql_check = "SELECT COUNT(1) FROM GRADE_ALUNOS WHERE ID_ALUNO = " + str(student_id)
-        cur.execute(sql_check)
-        cnt = cur.fetchone()[0]
-        if cnt > 0:
+        # Verificar se o aluno possui matrículas em grade_alunos
+        grade_count = db.grade_alunos.count_documents({"id_aluno": student_id})
+        if grade_count > 0:
             return jsonify({
                 'success': False,
                 'message': 'Aluno possui matrículas e não pode ser excluído. Remova-as antes.'
             }), 400
         
-        sql_exists = "SELECT COUNT(1) FROM ALUNOS WHERE MATRICULA = " + str(student_id)
-        cur.execute(sql_exists)
-        student_exists = cur.fetchone()[0]
-        if student_exists == 0:
+        # Verificar se o estudante existe
+        existing_student = db.alunos.find_one({"matricula": student_id})
+        if not existing_student:
             return jsonify({
                 'success': False,
                 'message': 'Estudante não encontrado'
             }), 404
         
-        sql = "DELETE FROM ALUNOS WHERE MATRICULA = " + str(student_id)
-        cur.execute(sql)
-        conn.commit()
+        # Deletar o estudante
+        db.alunos.delete_one({"matricula": student_id})
         
         return jsonify({
             'success': True,
@@ -335,11 +325,9 @@ def delete_student(student_id):
         }), 200
         
     except Exception as e:
-        conn.rollback()
         return jsonify({
             'success': False,
             'message': f'Erro ao deletar estudante: {str(e)}'
         }), 500
     finally:
-        cur.close()
-        release_connection(conn)
+        close()

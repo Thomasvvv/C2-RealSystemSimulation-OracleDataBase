@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
-from db.db_conn import get_connection, release_connection
+from db.db_conn import connect, close
+from datetime import datetime
 
 bp = Blueprint('reports', __name__)
 
@@ -9,17 +10,15 @@ bp = Blueprint('reports', __name__)
 @bp.route('/reports/dashboard', methods=['GET'])
 def dashboard_summary():
     """Resumo geral do sistema para dashboard"""
-    conn = None
-    cur = None
+    db = None
     
     try:
         print("🔄 [DASHBOARD] Iniciando geração de relatório do dashboard...")
         
-        conn = get_connection()
-        if not conn:
+        db = connect()
+        if not db:
             raise Exception("Falha ao estabelecer conexão com o banco de dados")
         
-        cur = conn.cursor()
         print("✅ [DASHBOARD] Conexão com banco estabelecida com sucesso")
         
     except Exception as e:
@@ -31,89 +30,85 @@ def dashboard_summary():
         print("📊 [DASHBOARD] Coletando contadores gerais...")
         
         try:
-            cur.execute("SELECT COALESCE(COUNT(*), 0) FROM CURSOS")
-            total_courses = cur.fetchone()[0]
+            total_courses = db.cursos.count_documents({})
             print(f"✅ [DASHBOARD] Total de cursos: {total_courses}")
         except Exception as e:
             print(f"❌ [DASHBOARD] Erro ao contar cursos: {e}")
-            raise Exception(f"Erro ao acessar tabela CURSO: {str(e)}")
+            raise Exception(f"Erro ao acessar coleção cursos: {str(e)}")
         
         try:
-            cur.execute("SELECT COALESCE(COUNT(*), 0) FROM ALUNOS")
-            total_students = cur.fetchone()[0]
+            total_students = db.alunos.count_documents({})
             print(f"✅ [DASHBOARD] Total de alunos: {total_students}")
         except Exception as e:
             print(f"❌ [DASHBOARD] Erro ao contar alunos: {e}")
-            raise Exception(f"Erro ao acessar tabela ALUNO: {str(e)}")
+            raise Exception(f"Erro ao acessar coleção alunos: {str(e)}")
         
         try:
-            cur.execute("SELECT COALESCE(COUNT(*), 0) FROM PROFESSORES")
-            total_professors = cur.fetchone()[0]
+            total_professors = db.professores.count_documents({})
             print(f"✅ [DASHBOARD] Total de professores: {total_professors}")
         except Exception as e:
             print(f"❌ [DASHBOARD] Erro ao contar professores: {e}")
-            raise Exception(f"Erro ao acessar tabela PROFESSOR: {str(e)}")
+            raise Exception(f"Erro ao acessar coleção professores: {str(e)}")
         
         try:
-            cur.execute("SELECT COALESCE(COUNT(*), 0) FROM MATERIAS")
-            total_subjects = cur.fetchone()[0]
+            total_subjects = db.materias.count_documents({})
             print(f"✅ [DASHBOARD] Total de matérias: {total_subjects}")
         except Exception as e:
             print(f"❌ [DASHBOARD] Erro ao contar matérias: {e}")
-            raise Exception(f"Erro ao acessar tabela MATERIA: {str(e)}")
+            raise Exception(f"Erro ao acessar coleção materias: {str(e)}")
         
         try:
-            cur.execute("SELECT COALESCE(COUNT(*), 0) FROM OFERTAS")
-            total_offers = cur.fetchone()[0]
+            total_offers = db.ofertas.count_documents({})
             print(f"✅ [DASHBOARD] Total de ofertas: {total_offers}")
         except Exception as e:
             print(f"❌ [DASHBOARD] Erro ao contar ofertas: {e}")
-            raise Exception(f"Erro ao acessar tabela OFERTA: {str(e)}")
+            raise Exception(f"Erro ao acessar coleção ofertas: {str(e)}")
         
         try:
-            cur.execute("SELECT COALESCE(COUNT(*), 0) FROM GRADE_ALUNOS")
-            total_enrollments = cur.fetchone()[0]
+            total_enrollments = db.grade_alunos.count_documents({})
             print(f"✅ [DASHBOARD] Total de matrículas: {total_enrollments}")
         except Exception as e:
             print(f"❌ [DASHBOARD] Erro ao contar matrículas: {e}")
-            raise Exception(f"Erro ao acessar tabela GRADE_ALUNO: {str(e)}")
+            raise Exception(f"Erro ao acessar coleção grade_alunos: {str(e)}")
         
         print("📅 [DASHBOARD] Coletando atividades recentes...")
         
         try:
-            cur.execute("""
-                SELECT 'Aluno' as TIPO, 
-                       COALESCE(NOME, 'Nome não informado') as NOME, 
-                       COALESCE(TO_CHAR(DATA_NASC, 'YYYY-MM-DD'), 'Data não informada') as DATA
-                FROM ALUNOS 
-                WHERE DATA_NASC IS NOT NULL
-                ORDER BY DATA_NASC DESC 
-                FETCH FIRST 5 ROWS ONLY
-            """)
-            recent_students = cur.fetchall()
+            recent_students = list(db.alunos.find(
+                {"data_nasc": {"$ne": None}},
+                {"_id": 0, "nome": 1, "data_nasc": 1}
+            ).sort("data_nasc", -1).limit(5))
             print(f"✅ [DASHBOARD] Coletados {len(recent_students)} alunos recentes")
         except Exception as e:
             print(f"❌ [DASHBOARD] Erro ao buscar alunos recentes: {e}")
             recent_students = []
         
         try:
-            cur.execute("""
-                SELECT 'Professor' as TIPO, 
-                       COALESCE(NOME, 'Nome não informado') as NOME, 
-                       COALESCE(TO_CHAR(DATA_NASC, 'YYYY-MM-DD'), 'Data não informada') as DATA
-                FROM PROFESSORES 
-                WHERE DATA_NASC IS NOT NULL
-                ORDER BY DATA_NASC DESC 
-                FETCH FIRST 5 ROWS ONLY
-            """)
-            recent_professors = cur.fetchall()
+            recent_professors = list(db.professores.find(
+                {"data_nasc": {"$ne": None}},
+                {"_id": 0, "nome": 1, "data_nasc": 1}
+            ).sort("data_nasc", -1).limit(5))
             print(f"✅ [DASHBOARD] Coletados {len(recent_professors)} professores recentes")
         except Exception as e:
             print(f"❌ [DASHBOARD] Erro ao buscar professores recentes: {e}")
             recent_professors = []
         
-        recent_activities = list(recent_students) + list(recent_professors)
-        recent_activities.sort(key=lambda x: x[2], reverse=True)
+        recent_activities = []
+        for student in recent_students:
+            recent_activities.append({
+                'tipo': 'Aluno',
+                'nome': student.get('nome', 'Nome não informado'),
+                'data': student.get('data_nasc').strftime('%Y-%m-%d') if student.get('data_nasc') else 'Data não informada'
+            })
+        
+        for professor in recent_professors:
+            recent_activities.append({
+                'tipo': 'Professor',
+                'nome': professor.get('nome', 'Nome não informado'),
+                'data': professor.get('data_nasc').strftime('%Y-%m-%d') if professor.get('data_nasc') else 'Data não informada'
+            })
+        
+        recent_activities.sort(key=lambda x: x['data'], reverse=True)
         recent_activities = recent_activities[:10]
         
         report = {
@@ -125,7 +120,7 @@ def dashboard_summary():
                 'ofertas': total_offers,
                 'matriculas': total_enrollments
             },
-            'atividades_recentes': [{'tipo': row[0], 'nome': row[1], 'data': row[2]} for row in recent_activities]
+            'atividades_recentes': recent_activities
         }
         
         print("✅ [DASHBOARD] Relatório gerado com sucesso")
@@ -133,7 +128,7 @@ def dashboard_summary():
         
     except Exception as e:
         error_msg = f'Erro ao gerar dashboard: {str(e)}'
-        error_type = 'sql_error' if 'ORA-' in str(e) else 'processamento'
+        error_type = 'processamento'
         
         print(f"❌ [DASHBOARD] {error_msg}")
         
@@ -148,28 +143,24 @@ def dashboard_summary():
         
     finally:
         try:
-            if cur:
-                cur.close()
-            if conn:
-                release_connection(conn)
+            if db:
+                close()
             print("🔒 [DASHBOARD] Conexões fechadas")
         except Exception as e:
             print(f"⚠️ [DASHBOARD] Erro ao fechar conexões: {e}")
 
 @bp.route('/reports/course-statistics', methods=['GET'])
 def course_statistics():
-    """Relatório de estatísticas por curso usando COUNT() e SUM()"""
-    conn = None
-    cur = None
+    """Relatório de estatísticas por curso usando aggregation"""
+    db = None
     
     try:
         print("🔄 [COURSE_STATS] Iniciando geração de estatísticas por curso...")
         
-        conn = get_connection()
-        if not conn:
+        db = connect()
+        if not db:
             raise Exception("Falha ao estabelecer conexão com o banco de dados")
         
-        cur = conn.cursor()
         print("✅ [COURSE_STATS] Conexão com banco estabelecida com sucesso")
         
     except Exception as e:
@@ -178,30 +169,62 @@ def course_statistics():
         return jsonify({'error': error_msg, 'tipo': 'conexao_banco'}), 500
     
     try:
-        print("📊 [COURSE_STATS] Executando consulta principal...")
+        print("📊 [COURSE_STATS] Executando aggregation pipeline...")
         
-        cur.execute("""
-            SELECT 
-                COALESCE(c.ID, 0) as CURSO_ID,
-                COALESCE(c.NOME, 'Nome não informado') as CURSO_NOME,
-                COALESCE(c.CARGA_HORARIA_TOTAL, 0) as CARGA_TOTAL_CURSO,
-                COALESCE(COUNT(DISTINCT a.MATRICULA), 0) as TOTAL_ALUNOS,
-                COALESCE(COUNT(DISTINCT m.ID_MATERIA), 0) as TOTAL_MATERIAS,
-                COALESCE(SUM(COALESCE(m.CARGA_HORARIA, 0)), 0) as CARGA_HORARIA_MATERIAS,
-                COALESCE(COUNT(DISTINCT o.ID), 0) as TOTAL_OFERTAS,
-                COALESCE(COUNT(DISTINCT ga.ID_ALUNO), 0) as TOTAL_MATRICULAS_ATIVAS,
-                COALESCE(COUNT(DISTINCT CASE WHEN o.ANO = EXTRACT(YEAR FROM SYSDATE) THEN o.ID END), 0) as OFERTAS_ANO_ATUAL
-            FROM CURSOS c
-            LEFT JOIN ALUNOS a ON c.ID = a.ID_CURSO
-            LEFT JOIN MATERIAS m ON c.ID = m.ID_CURSO  
-            LEFT JOIN OFERTAS o ON c.ID = o.ID_CURSO
-            LEFT JOIN GRADE_ALUNOS ga ON o.ID = ga.ID_OFERTA
-            GROUP BY c.ID, c.NOME, c.CARGA_HORARIA_TOTAL
-            ORDER BY TOTAL_ALUNOS DESC, TOTAL_OFERTAS DESC
-        """)
+        # Pipeline de aggregation para estatísticas por curso
+        pipeline = [
+            {
+                "$lookup": {
+                    "from": "alunos",
+                    "localField": "id",
+                    "foreignField": "id_curso",
+                    "as": "alunos"
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "materias",
+                    "localField": "id",
+                    "foreignField": "id_curso",
+                    "as": "materias"
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "ofertas",
+                    "localField": "id",
+                    "foreignField": "id_curso",
+                    "as": "ofertas"
+                }
+            },
+            {
+                "$project": {
+                    "_id": 0,
+                    "curso_id": "$id",
+                    "curso_nome": "$nome",
+                    "carga_total_curso": "$carga_horaria_total",
+                    "total_alunos": {"$size": "$alunos"},
+                    "total_materias": {"$size": "$materias"},
+                    "carga_horaria_materias": {
+                        "$sum": "$materias.carga_horaria"
+                    },
+                    "total_ofertas": {"$size": "$ofertas"},
+                    "ofertas_ano_atual": {
+                        "$size": {
+                            "$filter": {
+                                "input": "$ofertas",
+                                "as": "oferta",
+                                "cond": {"$eq": ["$$oferta.ano", datetime.now().year]}
+                            }
+                        }
+                    },
+                    "ofertas": 1
+                }
+            }
+        ]
         
-        courses = cur.fetchall()
-        print(f"✅ [COURSE_STATS] Consulta executada. {len(courses)} cursos encontrados")
+        courses = list(db.cursos.aggregate(pipeline))
+        print(f"✅ [COURSE_STATS] Aggregation executada. {len(courses)} cursos encontrados")
         
         if not courses:
             print("⚠️ [COURSE_STATS] Nenhum curso encontrado no banco")
@@ -217,11 +240,17 @@ def course_statistics():
                 'mensagem': 'Nenhum curso cadastrado no sistema'
             }), 200
         
+        # Calcular matriculas ativas por curso
+        for course in courses:
+            oferta_ids = [o.get('id') for o in course.get('ofertas', [])]
+            matriculas_count = db.grade_alunos.count_documents({"id_oferta": {"$in": oferta_ids}}) if oferta_ids else 0
+            course['total_matriculas_ativas'] = matriculas_count
+        
         try:
-            total_students = sum(course[3] or 0 for course in courses)
-            total_subjects = sum(course[4] or 0 for course in courses)
-            total_offers = sum(course[6] or 0 for course in courses)
-            total_enrollments = sum(course[7] or 0 for course in courses)
+            total_students = sum(course.get('total_alunos', 0) for course in courses)
+            total_subjects = sum(course.get('total_materias', 0) for course in courses)
+            total_offers = sum(course.get('total_ofertas', 0) for course in courses)
+            total_enrollments = sum(course.get('total_matriculas_ativas', 0) for course in courses)
             
             print(f"📊 [COURSE_STATS] Totais calculados - Alunos: {total_students}, Ofertas: {total_offers}")
         except Exception as e:
@@ -243,21 +272,25 @@ def course_statistics():
         
         for i, course in enumerate(courses):
             try:
-                perc_alunos = (course[3] / total_students * 100) if total_students > 0 else 0
-                perc_ofertas = (course[6] / total_offers * 100) if total_offers > 0 else 0
+                alunos = course.get('total_alunos', 0)
+                ofertas = course.get('total_ofertas', 0)
+                matriculas = course.get('total_matriculas_ativas', 0)
                 
-                media_alunos_por_oferta = round(course[7] / course[6], 2) if course[6] and course[6] > 0 else 0
+                perc_alunos = (alunos / total_students * 100) if total_students > 0 else 0
+                perc_ofertas = (ofertas / total_offers * 100) if total_offers > 0 else 0
+                
+                media_alunos_por_oferta = round(matriculas / ofertas, 2) if ofertas > 0 else 0
                 
                 course_stats = {
-                    'curso_id': course[0] or 0,
-                    'curso_nome': course[1] or 'Nome não informado',
-                    'carga_horaria_total_curso': course[2] or 0,
-                    'total_alunos': course[3] or 0,
-                    'total_materias': course[4] or 0,
-                    'carga_horaria_materias': course[5] or 0,
-                    'total_ofertas': course[6] or 0,
-                    'total_matriculas_ativas': course[7] or 0,
-                    'ofertas_ano_atual': course[8] or 0,
+                    'curso_id': course.get('curso_id', 0),
+                    'curso_nome': course.get('curso_nome', 'Nome não informado'),
+                    'carga_horaria_total_curso': course.get('carga_total_curso', 0),
+                    'total_alunos': alunos,
+                    'total_materias': course.get('total_materias', 0),
+                    'carga_horaria_materias': course.get('carga_horaria_materias', 0),
+                    'total_ofertas': ofertas,
+                    'total_matriculas_ativas': matriculas,
+                    'ofertas_ano_atual': course.get('ofertas_ano_atual', 0),
                     'percentual_alunos': round(perc_alunos, 2),
                     'percentual_ofertas': round(perc_ofertas, 2),
                     'media_alunos_por_oferta': media_alunos_por_oferta
@@ -269,12 +302,15 @@ def course_statistics():
                 print(f"⚠️ [COURSE_STATS] Erro ao processar curso {i+1}: {e}")
                 continue
         
+        # Ordenar por total de alunos e ofertas
+        report['estatisticas_por_curso'].sort(key=lambda x: (x['total_alunos'], x['total_ofertas']), reverse=True)
+        
         print(f"✅ [COURSE_STATS] Relatório gerado com {len(report['estatisticas_por_curso'])} cursos")
         return jsonify(report), 200
         
     except Exception as e:
         error_msg = f'Erro ao gerar relatório de estatísticas: {str(e)}'
-        error_type = 'sql_error' if 'ORA-' in str(e) else 'processamento'
+        error_type = 'processamento'
         
         print(f"❌ [COURSE_STATS] {error_msg}")
         
@@ -289,59 +325,102 @@ def course_statistics():
         
     finally:
         try:
-            if cur:
-                cur.close()
-            if conn:
-                release_connection(conn)
+            if db:
+                close()
             print("🔒 [COURSE_STATS] Conexões fechadas")
         except Exception as e:
             print(f"⚠️ [COURSE_STATS] Erro ao fechar conexões: {e}")
 
 @bp.route('/reports/offers-complete', methods=['GET'])
 def offers_complete_report():
-    """Relatório completo de ofertas com múltiplos JOINs"""
-    conn = None
-    cur = None
+    """Relatório completo de ofertas com aggregation pipeline"""
+    db = None
     
     try:
         print("🔄 [OFFERS_REPORT] Iniciando geração de relatório de ofertas...")
         
-        conn = get_connection()
-        if not conn:
+        db = connect()
+        if not db:
             raise Exception("Falha ao estabelecer conexão com o banco de dados")
         
-        cur = conn.cursor()
         print("✅ [OFFERS_REPORT] Conexão com banco estabelecida com sucesso")
         
-        print("📊 [OFFERS_REPORT] Executando consulta principal...")
+        print("📊 [OFFERS_REPORT] Executando aggregation pipeline...")
         
-        cur.execute("""
-            SELECT 
-                COALESCE(o.ID, 0) as OFERTA_ID,
-                COALESCE(o.ANO, 0) as ANO,
-                COALESCE(o.SEMESTRE, 0) as SEMESTRE,
-                COALESCE(c.NOME, 'Curso não informado') as CURSO_NOME,
-                COALESCE(m.NOME, 'Matéria não informada') as MATERIA_NOME,
-                COALESCE(m.PERIODO, 0) as PERIODO_MATERIA,
-                COALESCE(m.CARGA_HORARIA, 0) as CARGA_HORARIA_MATERIA,
-                COALESCE(p.NOME, 'Professor não informado') as PROFESSOR_NOME,
-                COALESCE(p.EMAIL, 'Email não informado') as PROFESSOR_EMAIL,
-                COALESCE(p.STATUS, 'Status não informado') as PROFESSOR_STATUS,
-                COALESCE(COUNT(ga.ID_ALUNO), 0) as TOTAL_MATRICULADOS,
-                COALESCE(c.CARGA_HORARIA_TOTAL, 0) as CARGA_TOTAL_CURSO
-            FROM OFERTAS o
-            INNER JOIN CURSOS c ON o.ID_CURSO = c.ID
-            INNER JOIN MATERIAS m ON o.ID_MATERIA = m.ID_MATERIA AND o.ID_CURSO = m.ID_CURSO
-            INNER JOIN PROFESSORES p ON o.ID_PROFESSOR = p.ID_PROFESSOR
-            LEFT JOIN GRADE_ALUNOS ga ON o.ID = ga.ID_OFERTA
-            GROUP BY o.ID, o.ANO, o.SEMESTRE, c.NOME, m.NOME, m.PERIODO, 
-                     m.CARGA_HORARIA, p.NOME, p.EMAIL, p.STATUS, c.CARGA_HORARIA_TOTAL
-            ORDER BY COALESCE(o.ANO, 0) DESC, COALESCE(o.SEMESTRE, 0) DESC, 
-                     COALESCE(c.NOME, 'ZZZ'), COALESCE(m.NOME, 'ZZZ')
-        """)
+        pipeline = [
+            {
+                "$lookup": {
+                    "from": "cursos",
+                    "localField": "id_curso",
+                    "foreignField": "id",
+                    "as": "curso"
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "materias",
+                    "let": {"id_mat": "$id_materia", "id_cur": "$id_curso"},
+                    "pipeline": [
+                        {"$match": {
+                            "$expr": {
+                                "$and": [
+                                    {"$eq": ["$id_materia", "$$id_mat"]},
+                                    {"$eq": ["$id_curso", "$$id_cur"]}
+                                ]
+                            }
+                        }}
+                    ],
+                    "as": "materia"
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "professores",
+                    "localField": "id_professor",
+                    "foreignField": "id_professor",
+                    "as": "professor"
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "grade_alunos",
+                    "localField": "id",
+                    "foreignField": "id_oferta",
+                    "as": "matriculas"
+                }
+            },
+            {"$unwind": {"path": "$curso", "preserveNullAndEmptyArrays": True}},
+            {"$unwind": {"path": "$materia", "preserveNullAndEmptyArrays": True}},
+            {"$unwind": {"path": "$professor", "preserveNullAndEmptyArrays": True}},
+            {
+                "$project": {
+                    "_id": 0,
+                    "oferta_id": "$id",
+                    "ano": 1,
+                    "semestre": 1,
+                    "curso_nome": "$curso.nome",
+                    "materia_nome": "$materia.nome",
+                    "periodo_materia": "$materia.periodo",
+                    "carga_horaria_materia": "$materia.carga_horaria",
+                    "professor_nome": "$professor.nome",
+                    "professor_email": "$professor.email",
+                    "professor_status": "$professor.status",
+                    "total_matriculados": {"$size": "$matriculas"},
+                    "carga_total_curso": "$curso.carga_horaria_total"
+                }
+            },
+            {
+                "$sort": {
+                    "ano": -1,
+                    "semestre": -1,
+                    "curso_nome": 1,
+                    "materia_nome": 1
+                }
+            }
+        ]
         
-        offers = cur.fetchall()
-        print(f"✅ [OFFERS_REPORT] Consulta executada. {len(offers)} ofertas encontradas")
+        offers = list(db.ofertas.aggregate(pipeline))
+        print(f"✅ [OFFERS_REPORT] Aggregation executada. {len(offers)} ofertas encontradas")
         
         if not offers:
             print("⚠️ [OFFERS_REPORT] Nenhuma oferta encontrada no banco")
@@ -358,10 +437,10 @@ def offers_complete_report():
             }), 200
         
         total_offers = len(offers)
-        total_students = sum(offer[10] or 0 for offer in offers)
+        total_students = sum(offer.get('total_matriculados', 0) for offer in offers)
         
-        professor_names = {offer[7] for offer in offers if offer[7] and offer[7] != 'Professor não informado'}
-        course_names = {offer[3] for offer in offers if offer[3] and offer[3] != 'Curso não informado'}
+        professor_names = {offer.get('professor_nome') for offer in offers if offer.get('professor_nome') and offer.get('professor_nome') != 'Professor não informado'}
+        course_names = {offer.get('curso_nome') for offer in offers if offer.get('curso_nome') and offer.get('curso_nome') != 'Curso não informado'}
         
         active_professors = len(professor_names)
         active_courses = len(course_names)
@@ -384,21 +463,18 @@ def offers_complete_report():
         processed_offers = 0
         for i, offer in enumerate(offers):
             try:
-                total_matriculados = offer[10] or 0
-                carga_total_curso = offer[11] or 0
-                
                 offer_detail = {
-                    'oferta_id': offer[0] or 0,
-                    'periodo': f"{offer[1] or 0}/{offer[2] or 0}º",
-                    'curso_nome': offer[3] or 'Curso não informado',
-                    'materia_nome': offer[4] or 'Matéria não informada',
-                    'periodo_materia': f"{offer[5] or 0}º período",
-                    'carga_horaria': f"{offer[6] or 0}h",
-                    'professor_nome': offer[7] or 'Professor não informado',
-                    'professor_email': offer[8] or 'Email não informado',
-                    'professor_status': offer[9] or 'Status não informado',
-                    'total_matriculados': total_matriculados,
-                    'carga_total_curso': carga_total_curso
+                    'oferta_id': offer.get('oferta_id', 0),
+                    'periodo': f"{offer.get('ano', 0)}/{offer.get('semestre', 0)}º",
+                    'curso_nome': offer.get('curso_nome') or 'Curso não informado',
+                    'materia_nome': offer.get('materia_nome') or 'Matéria não informada',
+                    'periodo_materia': f"{offer.get('periodo_materia', 0)}º período",
+                    'carga_horaria': f"{offer.get('carga_horaria_materia', 0)}h",
+                    'professor_nome': offer.get('professor_nome') or 'Professor não informado',
+                    'professor_email': offer.get('professor_email') or 'Email não informado',
+                    'professor_status': offer.get('professor_status') or 'Status não informado',
+                    'total_matriculados': offer.get('total_matriculados', 0),
+                    'carga_total_curso': offer.get('carga_total_curso', 0)
                 }
                 
                 report['todas_ofertas'].append(offer_detail)
@@ -413,7 +489,7 @@ def offers_complete_report():
         
     except Exception as e:
         error_msg = f'Erro ao gerar relatório de ofertas: {str(e)}'
-        error_type = 'sql_error' if 'ORA-' in str(e) else 'processamento'
+        error_type = 'processamento'
         
         print(f"❌ [OFFERS_REPORT] {error_msg}")
         
@@ -428,11 +504,8 @@ def offers_complete_report():
         
     finally:
         try:
-            if cur:
-                cur.close()
-                print("🔒 [OFFERS_REPORT] Cursor fechado")
-            if conn:
-                release_connection(conn)
-                print("🔒 [OFFERS_REPORT] Conexão liberada")
+            if db:
+                close()
+                print("🔒 [OFFERS_REPORT] Conexão fechada")
         except Exception as e:
             print(f"⚠️ [OFFERS_REPORT] Erro ao fechar conexões: {e}")
