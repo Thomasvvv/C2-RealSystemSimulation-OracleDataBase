@@ -143,7 +143,7 @@ def dashboard_summary():
         
     finally:
         try:
-            if db:
+            if db is not None:
                 close()
             print("🔒 [DASHBOARD] Conexões fechadas")
         except Exception as e:
@@ -325,7 +325,7 @@ def course_statistics():
         
     finally:
         try:
-            if db:
+            if db is not None:
                 close()
             print("🔒 [COURSE_STATS] Conexões fechadas")
         except Exception as e:
@@ -504,7 +504,7 @@ def offers_complete_report():
         
     finally:
         try:
-            if db:
+            if db is not None:
                 close()
                 print("🔒 [OFFERS_REPORT] Conexão fechada")
         except Exception as e:

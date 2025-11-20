@@ -76,7 +76,7 @@ def create_subject():
                 'message': f'Erro ao criar matéria: {str(e)}'
             }), 500
         finally:
-            if db:
+            if db is not None:
                 close()
             
     except Exception as e:
@@ -134,7 +134,7 @@ def list_subjects():
             'message': f'Erro ao listar matérias: {str(e)}'
         }), 500
     finally:
-        if db:
+        if db is not None:
             close()
 
 @bp.route('/subjects/<int:subject_id>/<int:course_id>', methods=['GET'])
@@ -187,7 +187,7 @@ def get_subject_by_id(subject_id, course_id):
     except Exception as e:
         return jsonify({'error': f'Erro ao buscar matéria: {str(e)}'}), 500
     finally:
-        if db:
+        if db is not None:
             close()
 
 @bp.route('/subjects/<int:subject_id>/<int:course_id>', methods=['PUT'])
@@ -253,7 +253,7 @@ def update_subject(subject_id, course_id):
         except Exception as e:
             return jsonify({'error': f'Erro ao atualizar matéria: {str(e)}'}), 500
         finally:
-            if db:
+            if db is not None:
                 close()
             
     except Exception as e:
@@ -288,7 +288,7 @@ def delete_subject(subject_id, course_id):
     except Exception as e:
         return jsonify({'error': f'Erro ao deletar matéria: {str(e)}'}), 500
     finally:
-        if db:
+        if db is not None:
             close()
 
 @bp.route('/courses/<int:course_id>/subjects', methods=['GET'])
@@ -338,5 +338,5 @@ def get_subjects_by_course(course_id):
     except Exception as e:
         return jsonify({'error': f'Erro ao listar matérias do curso: {str(e)}'}), 500
     finally:
-        if db:
+        if db is not None:
             close()

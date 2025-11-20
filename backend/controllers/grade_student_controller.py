@@ -42,7 +42,7 @@ def refresh_grade_student_table():
         print(f"Erro ao atualizar coleção grade_alunos: {str(e)}")
         return False
     finally:
-        if db:
+        if db is not None:
             close()
 
 @bp.route('/enrollments/refresh', methods=['POST'])
@@ -149,7 +149,7 @@ def list_enrollments():
     except Exception as e:
         return jsonify({'error': f'Erro ao listar matrículas: {str(e)}'}), 500
     finally:
-        if db:
+        if db is not None:
             close()
 
 @bp.route('/enrollments/<int:student_id>/<int:offer_id>', methods=['GET'])
@@ -243,7 +243,7 @@ def get_enrollment(student_id, offer_id):
     except Exception as e:
         return jsonify({'error': f'Erro ao buscar matrícula: {str(e)}'}), 500
     finally:
-        if db:
+        if db is not None:
             close()
 
 @bp.route('/students/<int:student_id>/enrollments', methods=['GET'])
@@ -337,7 +337,7 @@ def get_student_enrollments(student_id):
     except Exception as e:
         return jsonify({'error': f'Erro ao listar matrículas do aluno: {str(e)}'}), 500
     finally:
-        if db:
+        if db is not None:
             close()
 
 @bp.route('/offers/<int:offer_id>/enrollments', methods=['GET'])
@@ -425,5 +425,5 @@ def get_offer_enrollments(offer_id):
     except Exception as e:
         return jsonify({'error': f'Erro ao listar matrículas da oferta: {str(e)}'}), 500
     finally:
-        if db:
+        if db is not None:
             close()
