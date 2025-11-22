@@ -23,16 +23,16 @@ def seed_database():
         # ========================================
         print("\n📚 Inserindo cursos...")
         cursos = [
-            {"id": 1, "nome": "Ciência da Computação", "carga_horaria": 3200, "tipo": "Bacharelado"},
-            {"id": 2, "nome": "Engenharia de Software", "carga_horaria": 3000, "tipo": "Bacharelado"},
-            {"id": 3, "nome": "Sistemas de Informação", "carga_horaria": 2800, "tipo": "Bacharelado"},
-            {"id": 4, "nome": "Análise e Desenvolvimento de Sistemas", "carga_horaria": 2400, "tipo": "Tecnólogo"},
-            {"id": 5, "nome": "Redes de Computadores", "carga_horaria": 2400, "tipo": "Tecnólogo"},
-            {"id": 6, "nome": "Segurança da Informação", "carga_horaria": 2400, "tipo": "Tecnólogo"},
-            {"id": 7, "nome": "Banco de Dados", "carga_horaria": 2400, "tipo": "Tecnólogo"},
-            {"id": 8, "nome": "Inteligência Artificial", "carga_horaria": 3200, "tipo": "Bacharelado"},
-            {"id": 9, "nome": "Ciência de Dados", "carga_horaria": 3000, "tipo": "Bacharelado"},
-            {"id": 10, "nome": "Jogos Digitais", "carga_horaria": 2800, "tipo": "Bacharelado"}
+            {"id": 1, "nome": "Ciência da Computação", "carga_horaria_total": 3200},
+            {"id": 2, "nome": "Medicina", "carga_horaria_total": 7200},
+            {"id": 3, "nome": "Direito", "carga_horaria_total": 3700},
+            {"id": 4, "nome": "Engenharia Civil", "carga_horaria_total": 3600},
+            {"id": 5, "nome": "Psicologia", "carga_horaria_total": 4000},
+            {"id": 6, "nome": "Administração", "carga_horaria_total": 3000},
+            {"id": 7, "nome": "Arquitetura e Urbanismo", "carga_horaria_total": 3600},
+            {"id": 8, "nome": "Engenharia Elétrica", "carga_horaria_total": 3600},
+            {"id": 9, "nome": "Enfermagem", "carga_horaria_total": 4000},
+            {"id": 10, "nome": "Pedagogia", "carga_horaria_total": 3200}
         ]
         db.cursos.insert_many(cursos)
         print(f"✅ {len(cursos)} cursos inseridos")
@@ -42,16 +42,16 @@ def seed_database():
         # ========================================
         print("\n👨‍🏫 Inserindo professores...")
         professores = [
-            {"id_professor": 1, "nome": "Dr. Carlos Silva", "cpf": "12345678901", "email": "carlos.silva@universidade.edu.br", "data_contratacao": datetime(2015, 3, 15), "status": "Ativo", "titulacao": "Doutorado"},
-            {"id_professor": 2, "nome": "Dra. Ana Paula Santos", "cpf": "23456789012", "email": "ana.santos@universidade.edu.br", "data_contratacao": datetime(2016, 8, 20), "status": "Ativo", "titulacao": "Doutorado"},
-            {"id_professor": 3, "nome": "Me. Roberto Oliveira", "cpf": "34567890123", "email": "roberto.oliveira@universidade.edu.br", "data_contratacao": datetime(2017, 2, 10), "status": "Ativo", "titulacao": "Mestrado"},
-            {"id_professor": 4, "nome": "Dra. Fernanda Costa", "cpf": "45678901234", "email": "fernanda.costa@universidade.edu.br", "data_contratacao": datetime(2018, 1, 5), "status": "Ativo", "titulacao": "Doutorado"},
-            {"id_professor": 5, "nome": "Me. Lucas Ferreira", "cpf": "56789012345", "email": "lucas.ferreira@universidade.edu.br", "data_contratacao": datetime(2018, 7, 12), "status": "Ativo", "titulacao": "Mestrado"},
-            {"id_professor": 6, "nome": "Dr. Pedro Almeida", "cpf": "67890123456", "email": "pedro.almeida@universidade.edu.br", "data_contratacao": datetime(2019, 3, 18), "status": "Ativo", "titulacao": "Doutorado"},
-            {"id_professor": 7, "nome": "Dra. Juliana Rocha", "cpf": "78901234567", "email": "juliana.rocha@universidade.edu.br", "data_contratacao": datetime(2019, 9, 22), "status": "Ativo", "titulacao": "Doutorado"},
-            {"id_professor": 8, "nome": "Me. Rafael Lima", "cpf": "89012345678", "email": "rafael.lima@universidade.edu.br", "data_contratacao": datetime(2020, 2, 14), "status": "Ativo", "titulacao": "Mestrado"},
-            {"id_professor": 9, "nome": "Dra. Mariana Souza", "cpf": "90123456789", "email": "mariana.souza@universidade.edu.br", "data_contratacao": datetime(2020, 8, 30), "status": "Ativo", "titulacao": "Doutorado"},
-            {"id_professor": 10, "nome": "Me. Bruno Martins", "cpf": "01234567890", "email": "bruno.martins@universidade.edu.br", "data_contratacao": datetime(2021, 1, 20), "status": "Inativo", "titulacao": "Mestrado"}
+            {"id_professor": 1, "nome": "Dr. Carlos Silva", "cpf": "12345678901", "email": "carlos.silva@universidade.edu.br", "data_nasc": datetime(1975, 5, 10), "telefone": "11912345601", "status": "Ativo"},
+            {"id_professor": 2, "nome": "Dra. Ana Paula Santos", "cpf": "23456789012", "email": "ana.santos@universidade.edu.br", "data_nasc": datetime(1980, 3, 22), "telefone": "11912345602", "status": "Ativo"},
+            {"id_professor": 3, "nome": "Me. Roberto Oliveira", "cpf": "34567890123", "email": "roberto.oliveira@universidade.edu.br", "data_nasc": datetime(1978, 11, 15), "telefone": "11912345603", "status": "Ativo"},
+            {"id_professor": 4, "nome": "Dra. Fernanda Costa", "cpf": "45678901234", "email": "fernanda.costa@universidade.edu.br", "data_nasc": datetime(1982, 7, 8), "telefone": "11912345604", "status": "Ativo"},
+            {"id_professor": 5, "nome": "Me. Lucas Ferreira", "cpf": "56789012345", "email": "lucas.ferreira@universidade.edu.br", "data_nasc": datetime(1985, 9, 30), "telefone": "11912345605", "status": "Ativo"},
+            {"id_professor": 6, "nome": "Dr. Pedro Almeida", "cpf": "67890123456", "email": "pedro.almeida@universidade.edu.br", "data_nasc": datetime(1976, 2, 14), "telefone": "11912345606", "status": "Ativo"},
+            {"id_professor": 7, "nome": "Dra. Juliana Rocha", "cpf": "78901234567", "email": "juliana.rocha@universidade.edu.br", "data_nasc": datetime(1983, 6, 25), "telefone": "11912345607", "status": "Ativo"},
+            {"id_professor": 8, "nome": "Me. Rafael Lima", "cpf": "89012345678", "email": "rafael.lima@universidade.edu.br", "data_nasc": datetime(1988, 12, 3), "telefone": "11912345608", "status": "Ativo"},
+            {"id_professor": 9, "nome": "Dra. Mariana Souza", "cpf": "90123456789", "email": "mariana.souza@universidade.edu.br", "data_nasc": datetime(1981, 4, 18), "telefone": "11912345609", "status": "Ativo"},
+            {"id_professor": 10, "nome": "Me. Bruno Martins", "cpf": "01234567890", "email": "bruno.martins@universidade.edu.br", "data_nasc": datetime(1986, 10, 12), "telefone": "11912345610", "status": "Inativo"}
         ]
         db.professores.insert_many(professores)
         print(f"✅ {len(professores)} professores inseridos")
@@ -85,16 +85,16 @@ def seed_database():
         # ========================================
         print("\n👨‍🎓 Inserindo alunos...")
         alunos = [
-            {"matricula": "2023001", "nome": "João Pedro Silva", "cpf": "11122233344", "email": "joao.silva@aluno.edu.br", "data_nascimento": datetime(2002, 5, 15), "periodo": 4, "id_curso": 1, "status_curso": "Cursando"},
-            {"matricula": "2023002", "nome": "Maria Eduarda Santos", "cpf": "22233344455", "email": "maria.santos@aluno.edu.br", "data_nascimento": datetime(2001, 8, 22), "periodo": 5, "id_curso": 1, "status_curso": "Cursando"},
-            {"matricula": "2023003", "nome": "Pedro Henrique Costa", "cpf": "33344455566", "email": "pedro.costa@aluno.edu.br", "data_nascimento": datetime(2003, 1, 10), "periodo": 3, "id_curso": 2, "status_curso": "Cursando"},
-            {"matricula": "2023004", "nome": "Ana Julia Oliveira", "cpf": "44455566677", "email": "ana.oliveira@aluno.edu.br", "data_nascimento": datetime(2002, 11, 30), "periodo": 4, "id_curso": 2, "status_curso": "Cursando"},
-            {"matricula": "2023005", "nome": "Lucas Gabriel Ferreira", "cpf": "55566677788", "email": "lucas.ferreira@aluno.edu.br", "data_nascimento": datetime(2001, 4, 18), "periodo": 6, "id_curso": 1, "status_curso": "Cursando"},
-            {"matricula": "2023006", "nome": "Beatriz Almeida", "cpf": "66677788899", "email": "beatriz.almeida@aluno.edu.br", "data_nascimento": datetime(2003, 7, 25), "periodo": 2, "id_curso": 3, "status_curso": "Cursando"},
-            {"matricula": "2023007", "nome": "Guilherme Rocha", "cpf": "77788899900", "email": "guilherme.rocha@aluno.edu.br", "data_nascimento": datetime(2002, 9, 12), "periodo": 3, "id_curso": 3, "status_curso": "Trancado"},
-            {"matricula": "2023008", "nome": "Isabela Lima", "cpf": "88899900011", "email": "isabela.lima@aluno.edu.br", "data_nascimento": datetime(2001, 12, 5), "periodo": 5, "id_curso": 4, "status_curso": "Cursando"},
-            {"matricula": "2023009", "nome": "Rafael Souza", "cpf": "99900011122", "email": "rafael.souza@aluno.edu.br", "data_nascimento": datetime(2003, 3, 20), "periodo": 2, "id_curso": 4, "status_curso": "Cursando"},
-            {"matricula": "2023010", "nome": "Larissa Martins", "cpf": "00011122233", "email": "larissa.martins@aluno.edu.br", "data_nascimento": datetime(2002, 6, 8), "periodo": 4, "id_curso": 5, "status_curso": "Cursando"}
+            {"matricula": 202501, "nome": "João Pedro Silva", "cpf": "11122233344", "email": "joao.silva@aluno.edu.br", "data_nasc": datetime(2002, 5, 15), "telefone": "11987654321", "periodo": 4, "id_curso": 1, "status_curso": "Cursando"},
+            {"matricula": 202502, "nome": "Maria Eduarda Santos", "cpf": "22233344455", "email": "maria.santos@aluno.edu.br", "data_nasc": datetime(2001, 8, 22), "telefone": "11987654322", "periodo": 5, "id_curso": 1, "status_curso": "Cursando"},
+            {"matricula": 202503, "nome": "Pedro Henrique Costa", "cpf": "33344455566", "email": "pedro.costa@aluno.edu.br", "data_nasc": datetime(2003, 1, 10), "telefone": "11987654323", "periodo": 3, "id_curso": 2, "status_curso": "Cursando"},
+            {"matricula": 202504, "nome": "Ana Julia Oliveira", "cpf": "44455566677", "email": "ana.oliveira@aluno.edu.br", "data_nasc": datetime(2002, 11, 30), "telefone": "11987654324", "periodo": 4, "id_curso": 2, "status_curso": "Cursando"},
+            {"matricula": 202505, "nome": "Lucas Gabriel Ferreira", "cpf": "55566677788", "email": "lucas.ferreira@aluno.edu.br", "data_nasc": datetime(2001, 4, 18), "telefone": "11987654325", "periodo": 6, "id_curso": 1, "status_curso": "Cursando"},
+            {"matricula": 202506, "nome": "Beatriz Almeida", "cpf": "66677788899", "email": "beatriz.almeida@aluno.edu.br", "data_nasc": datetime(2003, 7, 25), "telefone": "11987654326", "periodo": 2, "id_curso": 3, "status_curso": "Cursando"},
+            {"matricula": 202507, "nome": "Guilherme Rocha", "cpf": "77788899900", "email": "guilherme.rocha@aluno.edu.br", "data_nasc": datetime(2002, 9, 12), "telefone": "11987654327", "periodo": 3, "id_curso": 3, "status_curso": "Trancado"},
+            {"matricula": 202508, "nome": "Isabela Lima", "cpf": "88899900011", "email": "isabela.lima@aluno.edu.br", "data_nasc": datetime(2001, 12, 5), "telefone": "11987654328", "periodo": 5, "id_curso": 4, "status_curso": "Cursando"},
+            {"matricula": 202509, "nome": "Rafael Souza", "cpf": "99900011122", "email": "rafael.souza@aluno.edu.br", "data_nasc": datetime(2003, 3, 20), "telefone": "11987654329", "periodo": 2, "id_curso": 4, "status_curso": "Cursando"},
+            {"matricula": 202510, "nome": "Larissa Martins", "cpf": "00011122233", "email": "larissa.martins@aluno.edu.br", "data_nasc": datetime(2002, 6, 8), "telefone": "11987654330", "periodo": 4, "id_curso": 5, "status_curso": "Cursando"}
         ]
         db.alunos.insert_many(alunos)
         print(f"✅ {len(alunos)} alunos inseridos")
@@ -123,16 +123,16 @@ def seed_database():
         # ========================================
         print("\n📊 Inserindo grade de alunos...")
         grade_alunos = [
-            {"id_oferta": 1, "id_aluno": 1, "nota_final": 8.5, "frequencia": 92.0, "status": "Aprovado"},
-            {"id_oferta": 1, "id_aluno": 2, "nota_final": 9.0, "frequencia": 95.0, "status": "Aprovado"},
-            {"id_oferta": 2, "id_aluno": 2, "nota_final": 7.5, "frequencia": 88.0, "status": "Aprovado"},
-            {"id_oferta": 3, "id_aluno": 1, "nota_final": 8.0, "frequencia": 90.0, "status": "Aprovado"},
-            {"id_oferta": 3, "id_aluno": 5, "nota_final": 9.5, "frequencia": 98.0, "status": "Aprovado"},
-            {"id_oferta": 4, "id_aluno": 5, "nota_final": 8.5, "frequencia": 93.0, "status": "Aprovado"},
-            {"id_oferta": 6, "id_aluno": 3, "nota_final": 7.0, "frequencia": 85.0, "status": "Aprovado"},
-            {"id_oferta": 6, "id_aluno": 4, "nota_final": 8.0, "frequencia": 90.0, "status": "Aprovado"},
-            {"id_oferta": 7, "id_aluno": 4, "nota_final": None, "frequencia": None, "status": "Cursando"},
-            {"id_oferta": 8, "id_aluno": 8, "nota_final": 9.0, "frequencia": 96.0, "status": "Aprovado"}
+            {"id_oferta": 1, "matricula": 202501, "nota_final": 8.5, "frequencia": 92.0, "status": "Aprovado"},
+            {"id_oferta": 1, "matricula": 202502, "nota_final": 9.0, "frequencia": 95.0, "status": "Aprovado"},
+            {"id_oferta": 2, "matricula": 202502, "nota_final": 7.5, "frequencia": 88.0, "status": "Aprovado"},
+            {"id_oferta": 3, "matricula": 202501, "nota_final": 8.0, "frequencia": 90.0, "status": "Aprovado"},
+            {"id_oferta": 3, "matricula": 202505, "nota_final": 9.5, "frequencia": 98.0, "status": "Aprovado"},
+            {"id_oferta": 4, "matricula": 202505, "nota_final": 8.5, "frequencia": 93.0, "status": "Aprovado"},
+            {"id_oferta": 6, "matricula": 202503, "nota_final": 7.0, "frequencia": 85.0, "status": "Aprovado"},
+            {"id_oferta": 6, "matricula": 202504, "nota_final": 8.0, "frequencia": 90.0, "status": "Aprovado"},
+            {"id_oferta": 7, "matricula": 202504, "nota_final": None, "frequencia": None, "status": "Cursando"},
+            {"id_oferta": 8, "matricula": 202508, "nota_final": 9.0, "frequencia": 96.0, "status": "Aprovado"}
         ]
         db.grade_alunos.insert_many(grade_alunos)
         print(f"✅ {len(grade_alunos)} registros de grade inseridos")
